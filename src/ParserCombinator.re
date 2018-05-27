@@ -32,8 +32,8 @@ let bind : parser('a) => ('a => parser('b)) => parser('b) =
 let seq' : parser('a) => parser('b) => parser(('a, 'b)) =
     (p, q) =>
         bind(p, x =>
-             bind(q, y =>
-                  result((x, y))));
+        bind(q, y =>
+        result((x, y))));
 
 let sat : (char => bool) => parser(char) =
     p => bind(item, x => if (p(x)) { result(x) } else { zero });
@@ -57,4 +57,12 @@ let letter : parser(char) =
     plus(lower, upper);
 
 let alphanum : parser(char) =
-    plus(letter, digit)
+    plus(letter, digit);
+
+let rec word : parser(string) = inp => {
+    let neWord =
+        bind(letter, x =>
+        bind(word, xs =>
+        result(String.concat("", [String.make(1, x), xs]))));
+    plus(neWord, result(""), inp);
+};
