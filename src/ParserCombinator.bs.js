@@ -24,6 +24,30 @@ function bind(p, f, inp) {
                   }), Curry._1(p, inp)));
 }
 
+function $star$great(x, y) {
+  return (function (param) {
+      return bind(x, (function () {
+                    return (function (param) {
+                        return bind(y, pure, param);
+                      });
+                  }), param);
+    });
+}
+
+function $less$star(x, y) {
+  return (function (param) {
+      return bind(x, (function (z) {
+                    return (function (param) {
+                        return bind(y, (function () {
+                                      return (function (param) {
+                                          return pure(z, param);
+                                        });
+                                    }), param);
+                      });
+                  }), param);
+    });
+}
+
 function join(x) {
   return (function (param) {
       return bind(x, (function (y) {
@@ -58,6 +82,8 @@ var Monad = /* module */[
   /* pure */pure,
   /* bind */bind,
   /* >>= */bind,
+  /* *> */$star$great,
+  /* <* */$less$star,
   /* join */join,
   /* mzero */mzero,
   /* mplus */mplus,
@@ -269,9 +295,10 @@ function many(p) {
 var partial_arg = many(letter);
 
 function word$prime(param) {
-  return bind(partial_arg, (function () {
+  return bind(partial_arg, (function (x) {
+                var partial_arg = List.fold_right(cons, x, "");
                 return (function (param) {
-                    return pure(implode, param);
+                    return pure(partial_arg, param);
                   });
               }), param);
 }
@@ -393,11 +420,7 @@ function ints(param) {
                                   var partial_arg$1 = many((function (param) {
                                           return bind(partial_arg, (function () {
                                                         return (function (param) {
-                                                            return bind($$int, (function (x) {
-                                                                          return (function (param) {
-                                                                              return pure(x, param);
-                                                                            });
-                                                                        }), param);
+                                                            return bind($$int, pure, param);
                                                           });
                                                       }), param);
                                         }));
@@ -424,6 +447,144 @@ function ints(param) {
               }), param);
 }
 
+function sepby1(p, sep) {
+  return (function (param) {
+      return bind(p, (function (x) {
+                    var partial_arg = many((function (param) {
+                            return bind(sep, (function () {
+                                          return (function (param) {
+                                              return bind(p, pure, param);
+                                            });
+                                        }), param);
+                          }));
+                    return (function (param) {
+                        return bind(partial_arg, (function (xs) {
+                                      var partial_arg = /* :: */[
+                                        x,
+                                        xs
+                                      ];
+                                      return (function (param) {
+                                          return pure(partial_arg, param);
+                                        });
+                                    }), param);
+                      });
+                  }), param);
+    });
+}
+
+var partial_arg$7 = mfilter((function (y) {
+        return y === /* "[" */91;
+      }), item);
+
+function ints$prime(param) {
+  return bind(partial_arg$7, (function () {
+                var partial_arg = sepby1($$int, mfilter((function (y) {
+                            return y === /* "," */44;
+                          }), item));
+                return (function (param) {
+                    return bind(partial_arg, (function (xs) {
+                                  var partial_arg = mfilter((function (y) {
+                                          return y === /* "]" */93;
+                                        }), item);
+                                  return (function (param) {
+                                      return bind(partial_arg, (function () {
+                                                    return (function (param) {
+                                                        return pure(xs, param);
+                                                      });
+                                                  }), param);
+                                    });
+                                }), param);
+                  });
+              }), param);
+}
+
+var ints$prime$prime = $less$star($star$great(mfilter((function (y) {
+                return y === /* "[" */91;
+              }), item), sepby1($$int, mfilter((function (y) {
+                    return y === /* "," */44;
+                  }), item))), mfilter((function (y) {
+            return y === /* "]" */93;
+          }), item));
+
+function bracket(open_p, p, close_p) {
+  return $less$star($star$great(open_p, p), close_p);
+}
+
+var ints$prime$prime$prime = bracket(mfilter((function (y) {
+            return y === /* "[" */91;
+          }), item), sepby1($$int, mfilter((function (y) {
+                return y === /* "," */44;
+              }), item)), mfilter((function (y) {
+            return y === /* "]" */93;
+          }), item));
+
+function sepby(p, sep) {
+  var partial_arg = sepby1(p, sep);
+  return (function (param) {
+      return mplus(partial_arg, (function (param) {
+                    return pure(/* [] */0, param);
+                  }), param);
+    });
+}
+
+var partial_arg$8 = $star$great(mfilter((function (y) {
+            return y === /* "-" */45;
+          }), item), (function (param) {
+        return pure((function (prim, prim$1) {
+                      return prim - prim$1 | 0;
+                    }), param);
+      }));
+
+var partial_arg$9 = $star$great(mfilter((function (y) {
+            return y === /* "+" */43;
+          }), item), (function (param) {
+        return pure((function (prim, prim$1) {
+                      return prim + prim$1 | 0;
+                    }), param);
+      }));
+
+function addop(param) {
+  return mplus(partial_arg$9, partial_arg$8, param);
+}
+
+function expr(inp) {
+  return bind(factor, (function (x) {
+                var partial_arg = many((function (param) {
+                        return bind(addop, (function (f) {
+                                      return (function (param) {
+                                          return bind(factor, (function (y) {
+                                                        var partial_arg = /* tuple */[
+                                                          f,
+                                                          y
+                                                        ];
+                                                        return (function (param) {
+                                                            return pure(partial_arg, param);
+                                                          });
+                                                      }), param);
+                                        });
+                                    }), param);
+                      }));
+                return (function (param) {
+                    return bind(partial_arg, (function (fys) {
+                                  var partial_arg = List.fold_left((function (x, param) {
+                                          return Curry._2(param[0], x, param[1]);
+                                        }), x, fys);
+                                  return (function (param) {
+                                      return pure(partial_arg, param);
+                                    });
+                                }), param);
+                  });
+              }), inp);
+}
+
+function factor(inp) {
+  return mplus(nat, bracket(mfilter((function (y) {
+                        return y === /* "(" */40;
+                      }), item), expr, mfilter((function (y) {
+                        return y === /* ")" */41;
+                      }), item)), inp);
+}
+
 exports.Monad = Monad;
 exports.Str = Str;
 exports.item = item;
@@ -446,4 +607,13 @@ exports.nat = nat;
 exports.$$int = $$int;
 exports.int$prime = int$prime;
 exports.ints = ints;
+exports.sepby1 = sepby1;
+exports.ints$prime = ints$prime;
+exports.ints$prime$prime = ints$prime$prime;
+exports.bracket = bracket;
+exports.ints$prime$prime$prime = ints$prime$prime$prime;
+exports.sepby = sepby;
+exports.addop = addop;
+exports.expr = expr;
+exports.factor = factor;
 /* digit Not a pure module */

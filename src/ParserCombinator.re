@@ -11,6 +11,12 @@ module Monad = {
                       |> concat);
     let (>>=) = bind;
 
+    let (*>) : parser('a) => parser('b) => parser('b) =
+        x => y => x >>= (_) => y >>= pure;
+
+    let (<*) : parser('a) => parser('b) => parser('a) =
+        x => y => x >>= z => y >>= (_) => pure(z);
+
     let join : parser(parser('a)) => parser('a) =
         x => x >>= (y => y);
 
@@ -111,7 +117,7 @@ let rec many : parser('a) => parser(list('a)) =
         many(p) >>= xs =>
         pure([x, ...xs])) +|+ pure([]));
 
-let word' = Monad.(many(letter) >>= x => pure(Str.implode));
+let word' = Monad.(many(letter) >>= x => pure(Str.implode(x)));
 
 let ident : parser(string) =
     Monad.(
@@ -145,6 +151,52 @@ let ints : parser(list(int)) =
     Monad.(
         char('[') >>= (_) =>
         int >>= x =>
-        many(char(',') >>= (_) => int >>= x => pure(x)) >>= xs =>
+        many(char(',') >>= (_) => int >>= pure) >>= xs =>
         char(']') >>= (_) =>
         pure([x, ...xs]));
+
+let sepby1 : parser('a) => parser('b) => parser(list('a)) =
+    p => sep =>
+    Monad.(
+        p >>= x =>
+        many(sep >>= (_) => p >>= pure) >>= xs =>
+        pure([x, ...xs]));
+
+let ints' = Monad.(
+    char('[') >>= (_) =>
+    sepby1(int, char(',')) >>= xs =>
+    char(']') >>= (_) =>
+    pure(xs));
+
+let ints'' = Monad.(char('[') *> sepby1(int, char(',')) <* char(']'));
+
+let bracket : parser('a) => parser('b) => parser('c) => parser('b) =
+    open_p => p => close_p =>
+    Monad.(open_p *> p <* close_p);
+
+let ints''' = bracket(char('['), sepby1(int, char(',')), char(']'));
+
+let sepby : parser('a) => parser('b) => parser(list('a)) =
+    p => sep => Monad.(sepby1(p, sep) +|+ pure([]));
+
+let addop : parser(int => int => int) =
+    Monad.((char('+') *> pure((+))) +|+ (char('-') *> pure((-))));
+
+/*let rec expr : parser(int) =
+    inp => Monad.(
+        (expr >>= x =>
+         addop >>= f =>
+         factor >>= y =>
+         pure(f(x, y)))
+        +|+ factor)(inp)
+and factor : parser(int) =
+    inp => Monad.(nat +|+ bracket(char('('), expr, char(')')))(inp);
+*/
+
+let rec expr : parser(int) =
+    inp => Monad.(
+        factor >>= x =>
+        many(addop >>= f => factor >>= y => pure((f, y))) >>= fys =>
+        pure(List.fold_left(x => ((f, y)) => f(x, y), x, fys)))(inp)
+and factor : parser(int) =
+    inp => Monad.(nat +|+ bracket(char('('), expr, char(')')))(inp);
