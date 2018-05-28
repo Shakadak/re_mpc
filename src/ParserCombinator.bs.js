@@ -5,21 +5,112 @@ var List = require("bs-platform/lib/js/list.js");
 var Curry = require("bs-platform/lib/js/curry.js");
 var $$String = require("bs-platform/lib/js/string.js");
 var Pervasives = require("bs-platform/lib/js/pervasives.js");
+var Caml_format = require("bs-platform/lib/js/caml_format.js");
 var Caml_string = require("bs-platform/lib/js/caml_string.js");
 
-function result(v, inp) {
+function pure(x, inp) {
   return /* :: */[
           /* tuple */[
-            v,
+            x,
             inp
           ],
           /* [] */0
         ];
 }
 
-function zero() {
+function bind(p, f, inp) {
+  return List.concat(List.map((function (param) {
+                    return Curry._2(f, param[0], param[1]);
+                  }), Curry._1(p, inp)));
+}
+
+function join(x) {
+  return (function (param) {
+      return bind(x, (function (y) {
+                    return y;
+                  }), param);
+    });
+}
+
+function mzero() {
   return /* [] */0;
 }
+
+function mplus(p, q, inp) {
+  return Pervasives.$at(Curry._1(p, inp), Curry._1(q, inp));
+}
+
+function mfilter(p, mx) {
+  return (function (param) {
+      return bind(mx, (function (x) {
+                    if (Curry._1(p, x)) {
+                      return (function (param) {
+                          return pure(x, param);
+                        });
+                    } else {
+                      return mzero;
+                    }
+                  }), param);
+    });
+}
+
+var Monad = /* module */[
+  /* pure */pure,
+  /* bind */bind,
+  /* >>= */bind,
+  /* join */join,
+  /* mzero */mzero,
+  /* mplus */mplus,
+  /* +|+ */mplus,
+  /* mfilter */mfilter,
+  /* >?= */mfilter
+];
+
+function head(str) {
+  return Caml_string.get(str, 0);
+}
+
+function tail(str) {
+  return $$String.sub(str, 1, str.length - 1 | 0);
+}
+
+function cons(c, str) {
+  return $$String.concat("", /* :: */[
+              $$String.make(1, c),
+              /* :: */[
+                str,
+                /* [] */0
+              ]
+            ]);
+}
+
+function concat(param) {
+  return $$String.concat("", param);
+}
+
+function explode(str) {
+  if (str === "") {
+    return /* [] */0;
+  } else {
+    return /* :: */[
+            Caml_string.get(str, 0),
+            explode(tail(str))
+          ];
+  }
+}
+
+function implode(str) {
+  return List.fold_right(cons, str, "");
+}
+
+var Str = /* module */[
+  /* head */head,
+  /* tail */tail,
+  /* cons */cons,
+  /* concat */concat,
+  /* explode */explode,
+  /* implode */implode
+];
 
 function item(str) {
   if (str === "") {
@@ -28,7 +119,7 @@ function item(str) {
     return /* :: */[
             /* tuple */[
               Caml_string.get(str, 0),
-              $$String.sub(str, 1, str.length - 1 | 0)
+              tail(str)
             ],
             /* [] */0
           ];
@@ -50,12 +141,6 @@ function seq(p, q, inp) {
                   }), Curry._1(p, inp)));
 }
 
-function bind(p, f, inp) {
-  return List.concat(List.map((function (param) {
-                    return Curry._2(f, param[0], param[1]);
-                  }), Curry._1(p, inp)));
-}
-
 function seq$prime(p, q) {
   return (function (param) {
       return bind(p, (function (x) {
@@ -66,7 +151,7 @@ function seq$prime(p, q) {
                                         y
                                       ];
                                       return (function (param) {
-                                          return result(partial_arg, param);
+                                          return pure(partial_arg, param);
                                         });
                                     }), param);
                       });
@@ -75,98 +160,290 @@ function seq$prime(p, q) {
 }
 
 function sat(p) {
-  return (function (param) {
-      return bind(item, (function (x) {
-                    if (Curry._1(p, x)) {
-                      return (function (param) {
-                          return result(x, param);
-                        });
-                    } else {
-                      return zero;
-                    }
-                  }), param);
-    });
+  return mfilter(p, item);
 }
 
 function $$char(x) {
-  return sat((function (y) {
+  return mfilter((function (y) {
                 return y === x;
-              }));
+              }), item);
 }
 
-var digit = sat((function (x) {
+var digit = mfilter((function (x) {
         if (/* "0" */48 <= x) {
           return x <= /* "9" */57;
         } else {
           return false;
         }
-      }));
+      }), item);
 
-var lower = sat((function (x) {
+var lower = mfilter((function (x) {
         if (/* "a" */97 <= x) {
           return x <= /* "z" */122;
         } else {
           return false;
         }
-      }));
+      }), item);
 
-var upper = sat((function (x) {
+var upper = mfilter((function (x) {
         if (/* "A" */65 <= x) {
           return x <= /* "Z" */90;
         } else {
           return false;
         }
-      }));
-
-function plus(p, q, inp) {
-  return Pervasives.$at(Curry._1(p, inp), Curry._1(q, inp));
-}
+      }), item);
 
 function letter(param) {
-  return plus(lower, upper, param);
+  return mplus(lower, upper, param);
 }
 
 function alphanum(param) {
-  return plus(letter, digit, param);
+  return mplus(letter, digit, param);
 }
 
 function word(inp) {
-  var neWord = function (param) {
-    return bind(letter, (function (x) {
-                  return (function (param) {
-                      return bind(word, (function (xs) {
-                                    var partial_arg = $$String.concat("", /* :: */[
-                                          $$String.make(1, x),
-                                          /* :: */[
-                                            xs,
-                                            /* [] */0
-                                          ]
-                                        ]);
-                                    return (function (param) {
-                                        return result(partial_arg, param);
-                                      });
-                                  }), param);
-                    });
-                }), param);
-  };
-  return plus(neWord, (function (param) {
-                return result("", param);
+  return mplus((function (param) {
+                return bind(letter, (function (x) {
+                              return (function (param) {
+                                  return bind(word, (function (xs) {
+                                                var partial_arg = cons(x, xs);
+                                                return (function (param) {
+                                                    return pure(partial_arg, param);
+                                                  });
+                                              }), param);
+                                });
+                            }), param);
+              }), (function (param) {
+                return pure("", param);
               }), inp);
 }
 
-exports.result = result;
-exports.zero = zero;
+function string(str) {
+  if (str === "") {
+    return (function (param) {
+        return pure("", param);
+      });
+  } else {
+    var x = Caml_string.get(str, 0);
+    var partial_arg = mfilter((function (y) {
+            return y === x;
+          }), item);
+    return (function (param) {
+        return bind(partial_arg, (function () {
+                      var partial_arg = string(tail(str));
+                      return (function (param) {
+                          return bind(partial_arg, (function () {
+                                        return (function (param) {
+                                            return pure(str, param);
+                                          });
+                                      }), param);
+                        });
+                    }), param);
+      });
+  }
+}
+
+function many(p) {
+  return (function (param) {
+      return mplus((function (param) {
+                    return bind(p, (function (x) {
+                                  var partial_arg = many(p);
+                                  return (function (param) {
+                                      return bind(partial_arg, (function (xs) {
+                                                    var partial_arg = /* :: */[
+                                                      x,
+                                                      xs
+                                                    ];
+                                                    return (function (param) {
+                                                        return pure(partial_arg, param);
+                                                      });
+                                                  }), param);
+                                    });
+                                }), param);
+                  }), (function (param) {
+                    return pure(/* [] */0, param);
+                  }), param);
+    });
+}
+
+var partial_arg = many(letter);
+
+function word$prime(param) {
+  return bind(partial_arg, (function () {
+                return (function (param) {
+                    return pure(implode, param);
+                  });
+              }), param);
+}
+
+function ident(param) {
+  return bind(lower, (function (x) {
+                var partial_arg = many(alphanum);
+                return (function (param) {
+                    return bind(partial_arg, (function (xs) {
+                                  var partial_arg = List.fold_right(cons, /* :: */[
+                                        x,
+                                        xs
+                                      ], "");
+                                  return (function (param) {
+                                      return pure(partial_arg, param);
+                                    });
+                                }), param);
+                  });
+              }), param);
+}
+
+function many1(p) {
+  return (function (param) {
+      return bind(p, (function (x) {
+                    var partial_arg = many(p);
+                    return (function (param) {
+                        return bind(partial_arg, (function (xs) {
+                                      var partial_arg = /* :: */[
+                                        x,
+                                        xs
+                                      ];
+                                      return (function (param) {
+                                          return pure(partial_arg, param);
+                                        });
+                                    }), param);
+                      });
+                  }), param);
+    });
+}
+
+var partial_arg$1 = many1(digit);
+
+function nat(param) {
+  return bind(partial_arg$1, (function (xs) {
+                var partial_arg = Caml_format.caml_int_of_string(List.fold_right(cons, xs, ""));
+                return (function (param) {
+                    return pure(partial_arg, param);
+                  });
+              }), param);
+}
+
+var partial_arg$2 = mfilter((function (y) {
+        return y === /* "-" */45;
+      }), item);
+
+function partial_arg$3(param) {
+  return bind(partial_arg$2, (function () {
+                return (function (param) {
+                    return bind(nat, (function (x) {
+                                  var partial_arg = -x | 0;
+                                  return (function (param) {
+                                      return pure(partial_arg, param);
+                                    });
+                                }), param);
+                  });
+              }), param);
+}
+
+function $$int(param) {
+  return mplus(partial_arg$3, nat, param);
+}
+
+var partial_arg$4 = mfilter((function (y) {
+        return y === /* "-" */45;
+      }), item);
+
+function partial_arg$5(param) {
+  return bind(partial_arg$4, (function () {
+                return (function (param) {
+                    return pure((function (x) {
+                                  return -x | 0;
+                                }), param);
+                  });
+              }), param);
+}
+
+function op(param) {
+  return mplus(partial_arg$5, (function (param) {
+                return pure((function (x) {
+                              return x;
+                            }), param);
+              }), param);
+}
+
+function int$prime(param) {
+  return bind(op, (function (f) {
+                return (function (param) {
+                    return bind(nat, (function (n) {
+                                  var partial_arg = Curry._1(f, n);
+                                  return (function (param) {
+                                      return pure(partial_arg, param);
+                                    });
+                                }), param);
+                  });
+              }), param);
+}
+
+var partial_arg$6 = mfilter((function (y) {
+        return y === /* "[" */91;
+      }), item);
+
+function ints(param) {
+  return bind(partial_arg$6, (function () {
+                return (function (param) {
+                    return bind($$int, (function (x) {
+                                  var partial_arg = mfilter((function (y) {
+                                          return y === /* "," */44;
+                                        }), item);
+                                  var partial_arg$1 = many((function (param) {
+                                          return bind(partial_arg, (function () {
+                                                        return (function (param) {
+                                                            return bind($$int, (function (x) {
+                                                                          return (function (param) {
+                                                                              return pure(x, param);
+                                                                            });
+                                                                        }), param);
+                                                          });
+                                                      }), param);
+                                        }));
+                                  return (function (param) {
+                                      return bind(partial_arg$1, (function (xs) {
+                                                    var partial_arg = mfilter((function (y) {
+                                                            return y === /* "]" */93;
+                                                          }), item);
+                                                    return (function (param) {
+                                                        return bind(partial_arg, (function () {
+                                                                      var partial_arg = /* :: */[
+                                                                        x,
+                                                                        xs
+                                                                      ];
+                                                                      return (function (param) {
+                                                                          return pure(partial_arg, param);
+                                                                        });
+                                                                    }), param);
+                                                      });
+                                                  }), param);
+                                    });
+                                }), param);
+                  });
+              }), param);
+}
+
+exports.Monad = Monad;
+exports.Str = Str;
 exports.item = item;
 exports.seq = seq;
-exports.bind = bind;
 exports.seq$prime = seq$prime;
 exports.sat = sat;
 exports.$$char = $$char;
 exports.digit = digit;
 exports.lower = lower;
 exports.upper = upper;
-exports.plus = plus;
 exports.letter = letter;
 exports.alphanum = alphanum;
 exports.word = word;
+exports.string = string;
+exports.many = many;
+exports.word$prime = word$prime;
+exports.ident = ident;
+exports.many1 = many1;
+exports.nat = nat;
+exports.$$int = $$int;
+exports.int$prime = int$prime;
+exports.ints = ints;
 /* digit Not a pure module */

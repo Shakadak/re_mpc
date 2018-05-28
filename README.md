@@ -16,3 +16,6 @@ npm run start
 
 # Editor
 If you use `vscode`, Press `Windows + Shift + B` it will build automatically
+
+# rtop stuff
+`#mod_use "path/to/module/file"` to bind the content of the file as a module.
