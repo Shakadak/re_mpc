@@ -11,6 +11,11 @@ module Monad = {
                       |> concat);
     let (>>=) = bind;
 
+    let map : ('a => 'b) => parser('a) => parser('b) =
+        f => mx => mx >>= x => pure(f(x));
+
+    let (<$>) = map;
+
     let (*>) : parser('a) => parser('b) => parser('b) =
         x => y => x >>= (_) => y >>= pure;
 
@@ -118,6 +123,8 @@ let rec many : parser('a) => parser(list('a)) =
         pure([x, ...xs])) +|+ pure([]));
 
 let word' = Monad.(many(letter) >>= x => pure(Str.implode(x)));
+
+let word'' = Monad.map(Str.implode, many(letter));
 
 let ident : parser(string) =
     Monad.(

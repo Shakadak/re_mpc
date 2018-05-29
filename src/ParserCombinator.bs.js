@@ -24,6 +24,17 @@ function bind(p, f, inp) {
                   }), Curry._1(p, inp)));
 }
 
+function map(f, mx) {
+  return (function (param) {
+      return bind(mx, (function (x) {
+                    var partial_arg = Curry._1(f, x);
+                    return (function (param) {
+                        return pure(partial_arg, param);
+                      });
+                  }), param);
+    });
+}
+
 function $star$great(x, y) {
   return (function (param) {
       return bind(x, (function () {
@@ -82,6 +93,8 @@ var Monad = /* module */[
   /* pure */pure,
   /* bind */bind,
   /* >>= */bind,
+  /* map */map,
+  /* <$> */map,
   /* *> */$star$great,
   /* <* */$less$star,
   /* join */join,
@@ -302,6 +315,8 @@ function word$prime(param) {
                   });
               }), param);
 }
+
+var word$prime$prime = map(implode, many(letter));
 
 function ident(param) {
   return bind(lower, (function (x) {
@@ -601,6 +616,7 @@ exports.word = word;
 exports.string = string;
 exports.many = many;
 exports.word$prime = word$prime;
+exports.word$prime$prime = word$prime$prime;
 exports.ident = ident;
 exports.many1 = many1;
 exports.nat = nat;
